@@ -8,5 +8,5 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Depends: R (>= 3.5.0)
-Imports: dplyr, duckdb, glue, DBI
+Imports: dplyr, duckdb, glue, DBI, stringr, purrr
 RoxygenNote: 7.3.2
