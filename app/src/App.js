@@ -4,6 +4,7 @@ import CryptoJS from 'crypto-js';
 import './App.css';
 
 function App() {
+  const [title, setTitle] = useState("");
   const [data, setData] = useState([]);
   const [asvsData, setAsvsData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -36,7 +37,8 @@ function App() {
           asvsResponse.json()
         ]);
 
-        setData(resultsData);
+        setData(resultsData.results);
+        setTitle(resultsData.title);
         setAsvsData(asvsData);
         setLoading(false);
       } catch (err) {
@@ -177,7 +179,7 @@ function App() {
       <Container fluid className="py-4">
         <Row>
           <Col>
-            <h1 className="mb-4">eDNA QC results</h1>
+            <h1 className="mb-4">eDNA QC results: {title}</h1>
             <Row className="align-items-center">
               <Col md={6}>
                 <Form.Control
@@ -352,12 +354,7 @@ function App() {
       <Modal show={showCongenericsModal} onHide={closeCongenericsModal} size="xl" centered>
         <Modal.Header closeButton>
           <Modal.Title>
-            Congenerics Analysis
-            {selectedAsvInfo && (
-              <div className="small text-muted mt-1">
-                TaxonID: {selectedAsvInfo.taxonID} | Coordinates: {selectedAsvInfo.coordinatePair.replace('_', ', ')}
-              </div>
-            )}
+            Congenerics analysis
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -377,24 +374,22 @@ function App() {
             <div>
               {selectedAsvInfo && (
                 <div className="mb-3">
-                  <h6>Selected ASV:</h6>
+                  {selectedAsvInfo && (
+                    <div className="mb-2">
+                      TaxonID: {selectedAsvInfo.taxonID} | Coordinates: {selectedAsvInfo.coordinatePair.replace('_', ', ')}
+                    </div>
+                  )}
                   <div className="bg-light p-2 rounded">
                     <code className="small" style={{ wordBreak: 'break-all' }}>
                       {selectedAsvInfo.sequence}
                     </code>
                   </div>
-                  <div className="mt-2">
-                    <small className="text-muted">
-                      <strong>SHA256:</strong> {selectedAsvInfo.hash}
-                    </small>
-                  </div>
                 </div>
               )}
               
-              <h6 className="mb-3">Congenerics Data:</h6>
               {Array.isArray(congenericsData) ? (
-                <Table responsive striped bordered hover>
-                  <thead className="table-dark">
+                <Table responsive>
+                  <thead className="">
                     <tr>
                       <th>Scientific Name</th>
                       <th>Taxon ID</th>
@@ -407,7 +402,7 @@ function App() {
                   <tbody>
                     {congenericsData.map((item, index) => (
                       <tr key={index}>
-                        <td className="fw-bold">{item.scientificName || 'N/A'}</td>
+                        <td className="speciesname">{item.scientificName || 'N/A'}</td>
                         <td>
                           {item.taxonID ? (
                             <a 
@@ -420,30 +415,10 @@ function App() {
                             </a>
                           ) : 'N/A'}
                         </td>
-                        <td>
-                          {item.density !== null ? 
-                            <span className="badge bg-info">{formatNumber(item.density)}</span> : 
-                            <span className="text-muted">-</span>
-                          }
-                        </td>
-                        <td>
-                          {item.identity !== null ? 
-                            <span className="badge bg-success">{(item.identity * 100).toFixed(1)}%</span> : 
-                            <span className="text-muted">-</span>
-                          }
-                        </td>
-                        <td>
-                          {item.refdb ? 
-                            <span className="badge bg-primary">Yes</span> : 
-                            <span className="badge bg-secondary">No</span>
-                          }
-                        </td>
-                        <td>
-                          {item.cells !== null ? 
-                            <span className="badge bg-warning text-dark">{formatNumber(item.cells)}</span> : 
-                            <span className="text-muted">-</span>
-                          }
-                        </td>
+                        <td>{item.density !== null ? formatNumber(item.density) : '-'}</td>
+                        <td>{item.identity !== null ? `${(item.identity * 100).toFixed(1)}%` : '-'}</td>
+                        <td>{item.refdb ? 'Yes' : 'No'}</td>
+                        <td>{item.cells !== null ? formatNumber(item.cells) : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
