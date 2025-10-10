@@ -1,63 +1,31 @@
-/* Custom styles to enhance Bootstrap components */
+body {
+  --highlight-color: rgb(11, 158, 158);
+}
+
 .App {
   min-height: 100vh;
 }
 
-/* Enhanced table header styling for sortable columns */
-.table th.sortable:hover {
-  background-color: rgba(255, 255, 255, 0.2) !important;
-  transition: background-color 0.2s ease;
+a {
+  color: var(--highlight-color);
 }
 
-/* Custom styling for better table readability */
-.table-responsive {
-  border-radius: 0.375rem;
-  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+.speciesname {
+  color: var(--highlight-color) !important;
 }
 
-/* Ensure proper spacing */
 .table th,
 .table td {
   vertical-align: middle;
 }
 
-/* Scientific name column styling */
-.table td:first-child {
-  font-weight: 600;
-}
-
-/* Clickable scientific name styling */
-.table td:first-child:hover {
-  background-color: rgba(13, 110, 253, 0.1) !important;
-  transition: background-color 0.2s ease;
-}
-
-/* ASV sequence styling */
-.table code {
-  font-size: 0.7rem;
-  line-height: 1.1;
-  background-color: #f8f9fa;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  font-family: 'Courier New', Courier, monospace;
-}
-
-/* Expandable row styling */
-.table td.bg-light {
-  border-top: none;
-}
-
-/* ASV card styling */
 .card {
   border: 1px solid #dee2e6;
-  border-radius: 0.375rem;
-  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
 }
 
 .card-header {
-  background-color: #f8f9fa;
   border-bottom: 1px solid #dee2e6;
-  font-weight: 500;
+  font-weight: 200;
 }
 
 /* Coordinate-based layout styling */

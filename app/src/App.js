@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Table, Form, Spinner, Alert, Badge } from 'react-bootstrap';
+import { Container, Row, Col, Table, Form, Spinner, Alert, Badge, Modal, Button } from 'react-bootstrap';
+import CryptoJS from 'crypto-js';
 import './App.css';
 
 function App() {
@@ -11,6 +12,11 @@ function App() {
   const [sortDirection, setSortDirection] = useState('asc');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedRows, setExpandedRows] = useState(new Set());
+  const [congenericsData, setCongenericsData] = useState(null);
+  const [congenericsLoading, setCongenericsLoading] = useState(false);
+  const [congenericsError, setCongenericsError] = useState(null);
+  const [showCongenericsModal, setShowCongenericsModal] = useState(false);
+  const [selectedAsvInfo, setSelectedAsvInfo] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -58,11 +64,66 @@ function App() {
     setExpandedRows(newExpandedRows);
   };
 
+  const handleAsvClick = async (taxonID, coordinatePair, sequence) => {
+    try {
+      setCongenericsLoading(true);
+      setCongenericsError(null);
+      
+      // Generate SHA256 hash of the sequence
+      const hash = CryptoJS.SHA256(sequence).toString();
+      
+      // Construct filename
+      const filename = `${taxonID}_${coordinatePair}_${hash}.json`;
+      
+      // Set selected ASV info for modal
+      setSelectedAsvInfo({
+        taxonID,
+        coordinatePair,
+        sequence,
+        hash,
+        filename
+      });
+      
+      // Fetch congenerics data
+      const response = await fetch(`/output/scandola/congenerics/${filename}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to load congenerics data: ${response.status}`);
+      }
+      
+      const congenericsData = await response.json();
+      setCongenericsData(congenericsData);
+      setShowCongenericsModal(true);
+      
+    } catch (err) {
+      setCongenericsError(err.message);
+    } finally {
+      setCongenericsLoading(false);
+    }
+  };
+
+  const closeCongenericsModal = () => {
+    setShowCongenericsModal(false);
+    setCongenericsData(null);
+    setSelectedAsvInfo(null);
+    setCongenericsError(null);
+  };
+
   const sortedData = [...data].sort((a, b) => {
     if (!sortField) return 0;
     
-    const aVal = a[sortField];
-    const bVal = b[sortField];
+    let aVal = a[sortField];
+    let bVal = b[sortField];
+    
+    // Handle null/undefined values
+    if (aVal === null || aVal === undefined) aVal = 0;
+    if (bVal === null || bVal === undefined) bVal = 0;
+    
+    // Convert to numbers for numeric fields
+    if (['density', 'suitability', 'cells', 'score'].includes(sortField)) {
+      aVal = parseFloat(aVal) || 0;
+      bVal = parseFloat(bVal) || 0;
+    }
     
     if (typeof aVal === 'string') {
       return sortDirection === 'asc' 
@@ -74,7 +135,8 @@ function App() {
   });
 
   const filteredData = sortedData.filter(item =>
-    item.scientificName.toLowerCase().includes(searchTerm.toLowerCase())
+    // item.scientificName.toLowerCase().includes(searchTerm.toLowerCase())
+    item
   );
 
   const formatNumber = (num) => {
@@ -115,7 +177,7 @@ function App() {
       <Container fluid className="py-4">
         <Row>
           <Col>
-            <h1 className="display-4 mb-4">eDNA QC Results</h1>
+            <h1 className="mb-4">eDNA QC results</h1>
             <Row className="align-items-center">
               <Col md={6}>
                 <Form.Control
@@ -157,18 +219,11 @@ function App() {
                     Taxon ID {sortField === 'taxonID' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
-                    onClick={() => handleSort('decimalLongitude')} 
+                    onClick={() => handleSort('score')} 
                     className="sortable"
                     style={{ cursor: 'pointer' }}
                   >
-                    Longitude {sortField === 'decimalLongitude' && (sortDirection === 'asc' ? '↑' : '↓')}
-                  </th>
-                  <th 
-                    onClick={() => handleSort('decimalLatitude')} 
-                    className="sortable"
-                    style={{ cursor: 'pointer' }}
-                  >
-                    Latitude {sortField === 'decimalLatitude' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    Score {sortField === 'score' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
                     onClick={() => handleSort('density')} 
@@ -204,14 +259,14 @@ function App() {
                     <React.Fragment key={index}>
                       <tr>
                         <td 
-                          className="fw-bold text-primary"
+                          className="speciesname"
                           style={{ cursor: 'pointer' }}
                           onClick={() => toggleRowExpansion(item.taxonID)}
                         >
                           {item.scientificName}
-                          <span className="ms-2">
+                          {/* <span className="ms-2">
                             {isExpanded ? '▼' : '▶'}
-                          </span>
+                          </span> */}
                         </td>
                         <td>
                           <a 
@@ -220,11 +275,10 @@ function App() {
                             rel="noopener noreferrer"
                             className="text-decoration-none"
                           >
-                            {formatNumber(item.taxonID)}
+                            {item.taxonID}
                           </a>
                         </td>
-                        <td>{formatNumber(item.decimalLongitude)}</td>
-                        <td>{formatNumber(item.decimalLatitude)}</td>
+                        <td>{formatNumber(item.score)}</td>
                         <td>{formatNumber(item.density)}</td>
                         <td>{formatNumber(item.suitability)}</td>
                         <td>{formatNumber(item.cells)}</td>
@@ -233,9 +287,6 @@ function App() {
                         <tr>
                           <td colSpan="7" className="bg-light">
                             <div className="p-3">
-                              <h6 className="mb-3">
-                                ASVs for {item.scientificName} ({coordinatePairs.length} coordinate pairs, {totalSequences} total sequences)
-                              </h6>
                               <div className="row">
                                 {coordinatePairs.map((coordinatePair) => {
                                   const [longitude, latitude] = coordinatePair.split('_');
@@ -247,14 +298,17 @@ function App() {
                                         <div className="card-header d-flex justify-content-between align-items-center">
                                           <div>
                                             <strong>Coordinates: {parseFloat(longitude).toFixed(5)}, {parseFloat(latitude).toFixed(5)}</strong>
-                                            <small className="text-muted ms-2">({sequences.length} sequences)</small>
                                           </div>
                                         </div>
                                         <div className="card-body">
                                           <div className="row">
                                             {sequences.map((sequence, seqIndex) => (
                                               <div key={seqIndex} className="col-md-6 col-lg-4 mb-3">
-                                                <div className="border rounded p-2 bg-light">
+                                                <div 
+                                                  className="border rounded p-2 bg-light clickable-asv"
+                                                  style={{ cursor: 'pointer' }}
+                                                  onClick={() => handleAsvClick(item.taxonID, coordinatePair, sequence)}
+                                                >
                                                   <div className="d-flex justify-content-between align-items-center mb-2">
                                                     <small className="text-muted fw-bold">Sequence {seqIndex + 1}</small>
                                                     <small className="text-muted">{sequence.length} bp</small>
@@ -293,6 +347,123 @@ function App() {
           </Col>
         </Row>
       </Container>
+
+      {/* Congenerics Modal */}
+      <Modal show={showCongenericsModal} onHide={closeCongenericsModal} size="xl" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            Congenerics Analysis
+            {selectedAsvInfo && (
+              <div className="small text-muted mt-1">
+                TaxonID: {selectedAsvInfo.taxonID} | Coordinates: {selectedAsvInfo.coordinatePair.replace('_', ', ')}
+              </div>
+            )}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {congenericsLoading ? (
+            <div className="text-center py-4">
+              <Spinner animation="border" role="status">
+                <span className="visually-hidden">Loading congenerics...</span>
+              </Spinner>
+              <div className="mt-2">Loading congenerics data...</div>
+            </div>
+          ) : congenericsError ? (
+            <Alert variant="danger">
+              <Alert.Heading>Error Loading Congenerics</Alert.Heading>
+              <p>{congenericsError}</p>
+            </Alert>
+          ) : congenericsData ? (
+            <div>
+              {selectedAsvInfo && (
+                <div className="mb-3">
+                  <h6>Selected ASV:</h6>
+                  <div className="bg-light p-2 rounded">
+                    <code className="small" style={{ wordBreak: 'break-all' }}>
+                      {selectedAsvInfo.sequence}
+                    </code>
+                  </div>
+                  <div className="mt-2">
+                    <small className="text-muted">
+                      <strong>SHA256:</strong> {selectedAsvInfo.hash}
+                    </small>
+                  </div>
+                </div>
+              )}
+              
+              <h6 className="mb-3">Congenerics Data:</h6>
+              {Array.isArray(congenericsData) ? (
+                <Table responsive striped bordered hover>
+                  <thead className="table-dark">
+                    <tr>
+                      <th>Scientific Name</th>
+                      <th>Taxon ID</th>
+                      <th>Density</th>
+                      <th>Identity</th>
+                      <th>RefDB</th>
+                      <th>Cells</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {congenericsData.map((item, index) => (
+                      <tr key={index}>
+                        <td className="fw-bold">{item.scientificName || 'N/A'}</td>
+                        <td>
+                          {item.taxonID ? (
+                            <a 
+                              href={`https://obisnew.obis.org/taxon/${item.taxonID}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-decoration-none"
+                            >
+                              {item.taxonID}
+                            </a>
+                          ) : 'N/A'}
+                        </td>
+                        <td>
+                          {item.density !== null ? 
+                            <span className="badge bg-info">{formatNumber(item.density)}</span> : 
+                            <span className="text-muted">-</span>
+                          }
+                        </td>
+                        <td>
+                          {item.identity !== null ? 
+                            <span className="badge bg-success">{(item.identity * 100).toFixed(1)}%</span> : 
+                            <span className="text-muted">-</span>
+                          }
+                        </td>
+                        <td>
+                          {item.refdb ? 
+                            <span className="badge bg-primary">Yes</span> : 
+                            <span className="badge bg-secondary">No</span>
+                          }
+                        </td>
+                        <td>
+                          {item.cells !== null ? 
+                            <span className="badge bg-warning text-dark">{formatNumber(item.cells)}</span> : 
+                            <span className="text-muted">-</span>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              ) : (
+                <div className="bg-light p-3 rounded">
+                  <pre className="mb-0" style={{ fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
+                    {JSON.stringify(congenericsData, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={closeCongenericsModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }
