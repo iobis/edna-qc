@@ -41,6 +41,10 @@ code {
   font-weight: 200;
 }
 
+.selectedspecies {
+  font-weight: bold;
+}
+
 /* Coordinate-based layout styling */
 .border.rounded.p-2.bg-light {
   background-color: #f8f9fa !important;
@@ -52,6 +56,16 @@ code {
 .border.rounded.p-2.bg-light:hover {
   background-color: #e9ecef !important;
   border-color: #dee2e6 !important;
+}
+
+/* Score badge styling */
+.table td span[style*="background-color"] {
+  transition: all 0.2s ease;
+}
+
+.table td span[style*="background-color"]:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* Responsive adjustments */

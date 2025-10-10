@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Table, Form, Spinner, Alert, Badge, Modal, Button } from 'react-bootstrap';
 import CryptoJS from 'crypto-js';
+import { scaleSequential, scaleDiverging } from 'd3-scale';
+import { interpolateViridis, interpolateRdBu, interpolateSpectral, interpolateOranges, interpolateBlues } from 'd3-scale-chromatic';
 import './App.css';
 
 function App() {
@@ -9,7 +11,7 @@ function App() {
   const [asvsData, setAsvsData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sortField, setSortField] = useState('density');
+  const [sortField, setSortField] = useState('score');
   const [sortDirection, setSortDirection] = useState('asc');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedRows, setExpandedRows] = useState(new Set());
@@ -19,13 +21,15 @@ function App() {
   const [showCongenericsModal, setShowCongenericsModal] = useState(false);
   const [selectedAsvInfo, setSelectedAsvInfo] = useState(null);
 
+  const dataset = new URLSearchParams(window.location.search).get('dataset');
+  console.log(dataset)
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load both results and ASVs data
         const [resultsResponse, asvsResponse] = await Promise.all([
-          fetch('/output/scandola/results.json'),
-          fetch('/output/scandola/asvs.json')
+          fetch(`/output/${dataset}/results.json`),
+          fetch(`/output/${dataset}/asvs.json`)
         ]);
 
         if (!resultsResponse.ok || !asvsResponse.ok) {
@@ -66,37 +70,39 @@ function App() {
     setExpandedRows(newExpandedRows);
   };
 
-  const handleAsvClick = async (taxonID, coordinatePair, sequence) => {
+  const handleAsvClick = async (taxonID, coordinatePair, sequence, scientificName) => {
     try {
       setCongenericsLoading(true);
       setCongenericsError(null);
       
-      // Generate SHA256 hash of the sequence
       const hash = CryptoJS.SHA256(sequence).toString();
-      
-      // Construct filename
       const filename = `${taxonID}_${coordinatePair}_${hash}.json`;
       
-      // Set selected ASV info for modal
       setSelectedAsvInfo({
         taxonID,
         coordinatePair,
         sequence,
         hash,
-        filename
+        filename,
+        scientificName
       });
       
-      // Fetch congenerics data
-      const response = await fetch(`/output/scandola/congenerics/${filename}`);
-      
+      const response = await fetch(`/output/${dataset}/congenerics/${filename}`);
       if (!response.ok) {
         throw new Error(`Failed to load congenerics data: ${response.status}`);
       }
-      
       const congenericsData = await response.json();
-      setCongenericsData(congenericsData);
+      const sortedCongenericsData = [...congenericsData].sort((a, b) => {
+        let aVal = a["score"];
+        let bVal = b["score"];
+        if (aVal === null || aVal === undefined) aVal = 0;
+        if (bVal === null || bVal === undefined) bVal = 0;
+        aVal = parseFloat(aVal) || 0;
+        bVal = parseFloat(bVal) || 0;
+        return bVal - aVal;
+      });
+      setCongenericsData(sortedCongenericsData);
       setShowCongenericsModal(true);
-      
     } catch (err) {
       setCongenericsError(err.message);
     } finally {
@@ -144,6 +150,124 @@ function App() {
   const formatNumber = (num) => {
     if (typeof num !== 'number') return num;
     return num.toLocaleString();
+  };
+
+  // Generic color scale function for different columns
+  const getColorScale = (field, interpolator, scaleType = 'sequential') => {
+    if (data.length === 0) return () => '#ffffff';
+    
+    const values = data.map(item => parseFloat(item[field]) || 0);
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    
+    if (scaleType === 'diverging') {
+      return scaleDiverging(interpolator)
+        .domain([minValue, (minValue + maxValue) / 2, maxValue]);
+    } else {
+      return scaleSequential(interpolator)
+        .domain([minValue, maxValue]);
+    }
+  };
+
+  // Specific color scales for each column
+  const getScoreColorScale = () => {
+    return getColorScale('score', interpolateSpectral, 'diverging');
+  };
+
+  const getDensityColorScale = () => {
+    return getColorScale('density', interpolateBlues, 'sequential');
+  };
+
+  const getSuitabilityColorScale = () => {
+    return getColorScale('suitability', interpolateBlues, 'sequential');
+  };
+
+  // Generic badge style function for any column
+  const getBadgeStyle = (value, colorScale) => {
+    const numValue = parseFloat(value) || 0;
+    const color = colorScale(numValue);
+    let backgroundColor = 'rgba(200, 200, 200, 0.3)';
+    
+    try {
+      if (color && color.startsWith('#')) {
+        const hex = color.replace('#', '');
+        if (hex.length === 6) {
+          const r = parseInt(hex.substr(0, 2), 16);
+          const g = parseInt(hex.substr(2, 2), 16);
+          const b = parseInt(hex.substr(4, 2), 16);
+          backgroundColor = `rgba(${r}, ${g}, ${b}, 0.4)`;
+        }
+      } else if (color && color.startsWith('rgb')) {
+        const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (rgbMatch) {
+          const r = parseInt(rgbMatch[1]);
+          const g = parseInt(rgbMatch[2]);
+          const b = parseInt(rgbMatch[3]);
+          backgroundColor = `rgba(${r}, ${g}, ${b}, 0.4)`;
+        }
+      }
+    } catch (error) {
+      console.error('Color parsing error:', error);
+    }
+    
+    return {
+      backgroundColor: backgroundColor,
+      color: '#000000',
+      padding: '4px 8px',
+      borderRadius: '12px',
+      fontSize: '0.875rem',
+      fontWeight: '500',
+      display: 'inline-block',
+      minWidth: '40px',
+      textAlign: 'center'
+    };
+  };
+
+  // Specific badge style functions for each column
+  const getScoreBadgeStyle = (score) => {
+    return getBadgeStyle(score, getScoreColorScale());
+  };
+
+  const getDensityBadgeStyle = (density) => {
+    return getBadgeStyle(density, getDensityColorScale());
+  };
+
+  const getSuitabilityBadgeStyle = (suitability) => {
+    return getBadgeStyle(suitability, getSuitabilityColorScale());
+  };
+
+  // Congenerics color scales with fixed 0-1 range
+  const getCongenericsScoreColorScale = () => {
+    return scaleDiverging(interpolateSpectral).domain([0, 0.5, 1]);
+  };
+
+  const getCongenericsDensityColorScale = () => {
+    return scaleSequential(interpolateBlues).domain([0, 1]);
+  };
+
+  const getCongenericsIdentityColorScale = () => {
+    return scaleSequential(interpolateBlues).domain([0, 1]);
+  };
+
+  const getCongenericsSuitabilityColorScale = () => {
+    return scaleSequential(interpolateBlues).domain([0, 1]);
+  };
+
+  // Congenerics badge style functions
+  const getCongenericsScoreBadgeStyle = (score) => {
+    return getBadgeStyle(score, getCongenericsScoreColorScale());
+  };
+
+  const getCongenericsDensityBadgeStyle = (density) => {
+    return getBadgeStyle(density, getCongenericsDensityColorScale());
+  };
+
+  const getCongenericsIdentityBadgeStyle = (identity) => {
+    return getBadgeStyle(identity, getCongenericsIdentityColorScale());
+  };
+
+  const getCongenericsSuitabilityBadgeStyle = (suitability) => {
+    return getBadgeStyle(suitability, getCongenericsSuitabilityColorScale());
   };
 
   if (loading) {
@@ -280,9 +404,21 @@ function App() {
                             {item.taxonID}
                           </a>
                         </td>
-                        <td>{formatNumber(item.score)}</td>
-                        <td>{formatNumber(item.density)}</td>
-                        <td>{formatNumber(item.suitability)}</td>
+                        <td>
+                          <span style={getScoreBadgeStyle(item.score)}>
+                            {formatNumber(item.score)}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={getDensityBadgeStyle(item.density)}>
+                            {formatNumber(item.density)}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={getSuitabilityBadgeStyle(item.suitability)}>
+                            {formatNumber(item.suitability)}
+                          </span>
+                        </td>
                         <td>{formatNumber(item.cells)}</td>
                       </tr>
                       {isExpanded && coordinatePairs.length > 0 && (
@@ -309,7 +445,7 @@ function App() {
                                                 <div 
                                                   className="border rounded p-2 bg-light clickable-asv"
                                                   style={{ cursor: 'pointer' }}
-                                                  onClick={() => handleAsvClick(item.taxonID, coordinatePair, sequence)}
+                                                  onClick={() => handleAsvClick(item.taxonID, coordinatePair, sequence, item.scientificName)}
                                                 >
                                                   <div className="d-flex justify-content-between align-items-center mb-2">
                                                     <small className="text-muted fw-bold">Sequence {seqIndex + 1}</small>
@@ -354,7 +490,7 @@ function App() {
       <Modal show={showCongenericsModal} onHide={closeCongenericsModal} size="xl" centered>
         <Modal.Header closeButton>
           <Modal.Title>
-            Congenerics analysis
+            Congenerics analysis: {selectedAsvInfo && <span>{selectedAsvInfo.scientificName}</span>}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -393,16 +529,19 @@ function App() {
                     <tr>
                       <th>Scientific Name</th>
                       <th>Taxon ID</th>
+                      <th>pident</th>
+                      <th>Score</th>
                       <th>Density</th>
                       <th>Identity</th>
-                      <th>RefDB</th>
+                      <th>Suitability</th>
+                      <th>Reference DB</th>
                       <th>Cells</th>
                     </tr>
                   </thead>
                   <tbody>
                     {congenericsData.map((item, index) => (
                       <tr key={index}>
-                        <td className="speciesname">{item.scientificName || 'N/A'}</td>
+                        <td className={selectedAsvInfo.scientificName == item.scientificName ? 'speciesname selectedspecies' : 'speciesname'}>{item.scientificName || 'N/A'}</td>
                         <td>
                           {item.taxonID ? (
                             <a 
@@ -415,10 +554,39 @@ function App() {
                             </a>
                           ) : 'N/A'}
                         </td>
-                        <td>{item.density !== null ? formatNumber(item.density) : '-'}</td>
-                        <td>{item.identity !== null ? `${(item.identity * 100).toFixed(1)}%` : '-'}</td>
-                        <td>{item.refdb ? 'Yes' : 'No'}</td>
-                        <td>{item.cells !== null ? formatNumber(item.cells) : '-'}</td>
+                        <td>
+                          {item.pident !== null ? item.pident : ''}
+                        </td>
+                        <td>
+                          {item.score !== null ? (
+                            <span style={getCongenericsScoreBadgeStyle(item.score)}>
+                              {formatNumber(item.score)}
+                            </span>
+                          ) : ''}
+                        </td>
+                        <td>
+                          {item.density !== null ? (
+                            <span style={getCongenericsDensityBadgeStyle(item.density)}>
+                              {formatNumber(item.density)}
+                            </span>
+                          ) : ''}
+                        </td>
+                        <td>
+                          {item.identity !== null ? (
+                            <span style={getCongenericsIdentityBadgeStyle(item.identity)}>
+                              {formatNumber(item.identity)}
+                            </span>
+                          ) : ''}
+                        </td>
+                        <td>
+                          {item.suitability !== null ? (
+                            <span style={getCongenericsSuitabilityBadgeStyle(item.suitability)}>
+                              {formatNumber(item.suitability)}
+                            </span>
+                          ) : ''}
+                        </td>
+                        <td>{item.refdb ? 'Yes' : '-'}</td>
+                        <td>{item.cells !== null ? formatNumber(item.cells) : ''}</td>
                       </tr>
                     ))}
                   </tbody>
