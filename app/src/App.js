@@ -22,7 +22,6 @@ function App() {
   const [selectedAsvInfo, setSelectedAsvInfo] = useState(null);
 
   const dataset = new URLSearchParams(window.location.search).get('dataset');
-  console.log(dataset)
 
   useEffect(() => {
     const loadData = async () => {
@@ -345,6 +344,16 @@ function App() {
                     Taxon ID {sortField === 'taxonID' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th 
+                    onClick={() => handleSort('phylum')} 
+                    className="sortable"
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Phylum {sortField === 'phylum' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th>
+                    Location
+                  </th>
+                  <th 
                     onClick={() => handleSort('score')} 
                     className="sortable"
                     style={{ cursor: 'pointer' }}
@@ -394,15 +403,21 @@ function App() {
                             {isExpanded ? '▼' : '▶'}
                           </span> */}
                         </td>
-                        <td>
+                        <td className="taxonid">
                           <a 
-                            href={`https://obisnew.obis.org/taxon/${item.taxonID}`}
+                            href={`https://obis.org/taxon/${item.taxonID}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-decoration-none"
                           >
                             {item.taxonID}
                           </a>
+                        </td>
+                        <td>
+                            {item.phylum}
+                        </td>
+                        <td>
+                            <a className="text-decoration-none" target="_blank" href={`https://wktmap.com?wkt=POINT(${item.decimalLongitude} ${item.decimalLatitude})`}>Map</a>
                         </td>
                         <td>
                           <span style={getScoreBadgeStyle(item.score)}>
@@ -512,7 +527,14 @@ function App() {
                 <div className="mb-3">
                   {selectedAsvInfo && (
                     <div className="mb-2">
-                      TaxonID: {selectedAsvInfo.taxonID} | Coordinates: {selectedAsvInfo.coordinatePair.replace('_', ', ')}
+                      TaxonID: <a 
+                          href={`https://obis.org/taxon/${selectedAsvInfo.taxonID}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-decoration-none"
+                        >
+                          {selectedAsvInfo.taxonID}
+                        </a> | Coordinates: <a className="text-decoration-none" target="_blank" href={`https://wktmap.com?wkt=POINT(${selectedAsvInfo.decimalLongitude} ${selectedAsvInfo.decimalLatitude})`}>Map</a>
                     </div>
                   )}
                   <div className="bg-light p-2 rounded">
@@ -545,7 +567,7 @@ function App() {
                         <td>
                           {item.taxonID ? (
                             <a 
-                              href={`https://obisnew.obis.org/taxon/${item.taxonID}`}
+                              href={`https://obis.org/taxon/${item.taxonID}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-decoration-none"
